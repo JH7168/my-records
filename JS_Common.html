@@ -1,0 +1,474 @@
+<script>
+  // ==========================================
+  // 1. 전역 변수 및 지도 설정 데이터
+  // ==========================================
+  let dateRecords = [];
+  let accountRecords = [];
+  let provincesGeoJson, municipalitiesGeoJson;
+  let myChart, accountChart;
+  
+  let currentSelectedMonth = 6;
+  let currentSelectedDay = null; 
+  let editingDateRow = null; 
+
+  let currentModalRegion = "";
+  let modalSelectedMonth = 6;
+  let modalSelectedDay = null;
+
+  let accCurrentSelectedMonth = 6;
+  let accCurrentSelectedDay = null;
+  let editingAccRow = null; 
+
+  const provUrl = 'https://raw.githubusercontent.com/southkorea/southkorea-maps/master/kostat/2013/json/skorea_provinces_geo_simple.json';
+  const muniUrl = 'https://raw.githubusercontent.com/southkorea/southkorea-maps/master/kostat/2013/json/skorea_municipalities_geo_simple.json';
+
+  const provinceCodes = { "서울특별시": "11", "부산광역시": "21", "대구광역시": "22", "인천광역시": "23", "광주광역시": "24", "대전광역시": "25", "울산광역시": "26", "세종특별자치시": "29", "경기도": "31", "강원도": "32", "충청북도": "33", "충청남도": "34", "전라북도": "35", "전라남도": "36", "경상북도": "37", "경상남도": "38", "제주특별자치도": "39" };
+  const regionData = {
+    "서울특별시": ["강남구", "강동구", "강북구", "강서구", "관악구", "광진구", "구로구", "금천구", "노원구", "도봉구", "동대문구", "동작구", "마포구", "서대문구", "서초구", "성동구", "성북구", "송파구", "양천구", "영등포구", "용산구", "은평구", "종로구", "중구", "중랑구"],
+    "부산광역시": ["강서구", "금정구", "기장군", "남구", "동구", "동래구", "부산진구", "북구", "사상구", "사하구", "서구", "수영구", "연제구", "영도구", "중구", "해운대구"],
+    "대구광역시": ["남구", "달서구", "달성군", "동구", "북구", "서구", "수성구", "중구", "군위군"],
+    "인천광역시": ["강화군", "계양구", "남동구", "동구", "미추홀구", "부평구", "서구", "연수구", "옹진군", "중구"],
+    "광주광역시": ["광산구", "남구", "동구", "북구", "서구"],
+    "대전광역시": ["대덕구", "동구", "서구", "유성구", "중구"],
+    "울산광역시": ["남구", "동구", "북구", "중구", "울주군"],
+    "세종특별자치시": ["세종특별자치시"],
+    "경기도": ["가평군", "고양시", "과천시", "광명시", "광주시", "구리시", "군포시", "김포시", "남양주시", "동두천시", "부천시", "성남시", "수원시", "시흥시", "안산시", "안성시", "안양시", "양주시", "양평군", "여주시", "연천군", "오산시", "용인시", "의왕시", "의정부시", "이천시", "파주시", "평택시", "포천시", "하남시", "화성시"],
+    "강원도": ["강릉시", "고성군", "동해시", "삼척시", "속초시", "양구군", "양양군", "영월군", "원주시", "인제군", "정선군", "철원군", "춘천시", "태백시", "평창군", "홍천군", "화천군", "횡성군"],
+    "충청북도": ["괴산군", "단양군", "보은군", "영동군", "옥천군", "음성군", "제천시", "증평군", "진천군", "청주시", "충주시"],
+    "충청남도": ["계룡시", "공주시", "금산군", "논산시", "당진시", "보령시", "부여군", "서산시", "서천군", "아산시", "예산군", "천안시", "청양군", "태안군", "홍성군"],
+    "전라북도": ["고창군", "군산시", "김제시", "남원시", "무주군", "부안군", "순창군", "완주군", "익산시", "임실군", "장수군", "전주시", "정읍시", "진안군"],
+    "전라남도": ["강진군", "고흥군", "곡성군", "광양시", "구례군", "나주시", "담양군", "목포시", "무안군", "보성군", "순천시", "신안군", "여수시", "영광군", "영암군", "완도군", "장성군", "장흥군", "진도군", "함평군", "해남군", "화순군"],
+    "경상북도": ["경산시", "경주시", "고령군", "구미시", "김천시", "문경시", "봉화군", "상주시", "성주군", "안동시", "영덕군", "영양군", "영주시", "영천시", "예천군", "울릉군", "울진군", "의성군", "청도군", "청송군", "칠곡군", "포항시"],
+    "경상남도": ["거제시", "거창군", "고성군", "김해시", "남해군", "밀양시", "사천시", "산청군", "양산시", "의령군", "진주시", "창녕군", "창원시", "통영시", "하동군", "함안군", "함양군", "합천군"],
+    "제주특별자치도": ["서귀포시", "제주시"]
+  };
+
+  // ==========================================
+  // 2. 앱 초기화 (App Init)
+  // ==========================================
+  function initApp() {
+    // 차트 및 지도 초기화
+    myChart = echarts.init(document.getElementById('map-container'));
+    accountChart = echarts.init(document.getElementById('account-chart-container'));
+    
+    // 입력 폼 날짜 기본 세팅
+    populateDateSelects('yearInput', 'monthInput', 'dayInput');
+    populateDateSelects('accYearInput', 'accMonthInput', 'accDayInput');
+
+    // 조회용 년도 필터 기본 세팅
+    const filterYearSelect = document.getElementById('filterYear');
+    const modalFilterYearSelect = document.getElementById('modalFilterYear');
+    const accFilterYearSelect = document.getElementById('accFilterYear');
+    for (let i = 2025; i <= 2030; i++) {
+      filterYearSelect.add(new Option(i + "년", i));
+      modalFilterYearSelect.add(new Option(i + "년", i));
+      accFilterYearSelect.add(new Option(i + "년", i));
+    }
+    
+    const today = new Date();
+    filterYearSelect.value = today.getFullYear();
+    modalFilterYearSelect.value = today.getFullYear();
+    accFilterYearSelect.value = today.getFullYear();
+    
+    currentSelectedMonth = today.getMonth() + 1;
+    accCurrentSelectedMonth = today.getMonth() + 1;
+    initMonthButtons(); 
+    initAccMonthButtons(); 
+
+    // [데이트 기록] 지역 선택 드롭다운 세팅
+    const provinceInput = document.getElementById('provinceInput');
+    for (let province in regionData) provinceInput.add(new Option(province, province));
+    provinceInput.value = "전라남도";
+    updateDistrictOptions();
+    document.getElementById('districtInput').value = "여수시";
+
+    // ✨ [데이트 추천] 지역 선택 드롭다운 세팅
+    const aiProvinceInput = document.getElementById('aiProvinceInput');
+    for (let province in regionData) aiProvinceInput.add(new Option(province, province));
+    aiProvinceInput.value = "전라남도";
+    updateAiDistrictOptions();
+    document.getElementById('aiDistrictInput').value = "여수시";
+
+    // ✨ [데이트 추천] 일/시간/분/추천개수 드롭다운 세팅
+    populateSelect('aiDays', 0, 7, 0);      // 0일 ~ 7일
+    populateSelect('aiHours', 0, 24, 4);    // 0시간 ~ 24시간 (기본값 4시간)
+    populateSelect('aiMinutes', 0, 59, 0);  // 0분 ~ 59분
+    populateSelect('aiCount', 1, 10, 3);    // 1개 ~ 10개 추천 (기본값 3개)
+
+    updateAccountCategoryOptions();
+
+    // 데이트 기록 카테고리 통합
+    const unifiedCats = ["🍕 식당", "☕ 카페/디저트", "🚗 교통/유류비", "🏨 숙박", "🎬 문화/여가", "🛍️ 쇼핑", "💸 기타 지출"];
+    const catInput = document.getElementById('categoryInput');
+    catInput.innerHTML = '';
+    unifiedCats.forEach(cat => catInput.add(new Option(cat, cat)));
+
+    // 구글 시트에서 데이트 기록 가져와서 지도 그리기
+    google.script.run.withSuccessHandler(function(data) {
+      dateRecords = data;
+      Promise.all([
+        fetch(provUrl).then(res => res.json()),
+        fetch(muniUrl).then(res => res.json())
+      ]).then(([prov, muni]) => {
+        provincesGeoJson = prov; municipalitiesGeoJson = muni;
+        echarts.registerMap('korea_prov', provincesGeoJson);
+        renderProvinceMap();
+        renderDateView();
+      });
+    }).getDateData();
+
+    loadAccountData();
+  }
+
+  // ==========================================
+  // 3. UI 컴포넌트 동적 생성 및 도우미 함수
+  // ==========================================
+  
+  // 드롭다운에 숫자 옵션을 채워주는 함수
+  function populateSelect(id, min, max, defaultVal) {
+    const el = document.getElementById(id);
+    el.innerHTML = '';
+    for(let i=min; i<=max; i++) {
+      el.add(new Option(i, i));
+    }
+    el.value = defaultVal;
+  }
+
+  // ✨ 데이트 추천 폼 전용 시/군/구 업데이트 함수
+  function updateAiDistrictOptions() {
+    const province = document.getElementById('aiProvinceInput').value;
+    const districtInput = document.getElementById('aiDistrictInput');
+    districtInput.innerHTML = ''; 
+    if (regionData[province]) {
+      regionData[province].forEach(d => districtInput.add(new Option(d, d)));
+    }
+  }
+
+  // ✨ '직접 입력' 선택 시 인풋창 열고 닫는 함수
+  function toggleDirectInput(selectObj, inputId) {
+    const inputEl = document.getElementById(inputId);
+    inputEl.style.display = selectObj.value === '직접 입력' ? 'block' : 'none';
+  }
+
+  function initMonthButtons() {
+    const btnContainer = document.getElementById('filterMonthButtons');
+    btnContainer.innerHTML = '';
+    for (let m = 1; m <= 12; m++) {
+      const btn = document.createElement('button');
+      btn.className = 'month-btn' + (m === currentSelectedMonth ? ' active' : '');
+      btn.innerText = m + '월';
+      btn.onclick = function() {
+        document.querySelectorAll('#filterMonthButtons .month-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentSelectedMonth = m;
+        currentSelectedDay = null; 
+        renderDateView();
+      };
+      btnContainer.appendChild(btn);
+    }
+  }
+
+  function initAccMonthButtons() {
+    const btnContainer = document.getElementById('accFilterMonthButtons');
+    btnContainer.innerHTML = '';
+    for (let m = 1; m <= 12; m++) {
+      const btn = document.createElement('button');
+      btn.className = 'month-btn' + (m === accCurrentSelectedMonth ? ' active' : '');
+      btn.innerText = m + '월';
+      btn.onclick = function() {
+        document.querySelectorAll('#accFilterMonthButtons .month-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        accCurrentSelectedMonth = m;
+        accCurrentSelectedDay = null; 
+        renderAccountView();
+      };
+      btnContainer.appendChild(btn);
+    }
+  }
+
+  function initModalMonthButtons() {
+    const btnContainer = document.getElementById('modalFilterMonthButtons');
+    btnContainer.innerHTML = '';
+    for (let m = 1; m <= 12; m++) {
+      const btn = document.createElement('button');
+      btn.className = 'month-btn' + (m === modalSelectedMonth ? ' active' : '');
+      btn.innerText = m + '월';
+      btn.onclick = function() {
+        document.querySelectorAll('#modalFilterMonthButtons .month-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        modalSelectedMonth = m;
+        modalSelectedDay = null; 
+        renderModalDateView();
+      };
+      btnContainer.appendChild(btn);
+    }
+  }
+
+  // 화면 메뉴 이동 내비게이션 (추천 화면 영역 제어 추가)
+  function navigate(app) {
+    document.getElementById('home-screen').style.display = 'none';
+    document.getElementById('date-app').style.display = 'none';
+    document.getElementById('account-app').style.display = 'none';
+    document.getElementById('recommend-app').style.display = 'none';
+
+    if (app === 'home') document.getElementById('home-screen').style.display = 'flex';
+    if (app === 'date') {
+      document.getElementById('date-app').style.display = 'block';
+      setTimeout(() => myChart.resize(), 50);
+    }
+    if (app === 'account') {
+      document.getElementById('account-app').style.display = 'block';
+      setTimeout(() => accountChart.resize(), 50);
+    }
+    if (app === 'recommend') {
+      document.getElementById('recommend-app').style.display = 'block';
+    }
+  }
+
+  function populateDateSelects(yId, mId, dId) {
+    const ySel = document.getElementById(yId);
+    const mSel = document.getElementById(mId);
+    const dSel = document.getElementById(dId);
+    ySel.innerHTML = ''; mSel.innerHTML = ''; dSel.innerHTML = '';
+    
+    for(let i=2025; i<=2030; i++) ySel.add(new Option(i, i));
+    for(let i=1; i<=12; i++) mSel.add(new Option(i, i));
+    for(let i=1; i<=31; i++) dSel.add(new Option(i, i));
+
+    const today = new Date();
+    ySel.value = today.getFullYear();
+    mSel.value = today.getMonth() + 1;
+    dSel.value = today.getDate();
+  }
+
+  function switchDateTab(tab) {
+    document.getElementById('tab-map').classList.remove('active');
+    document.getElementById('tab-date').classList.remove('active');
+    document.getElementById('tab-' + tab).classList.add('active');
+
+    if (tab === 'map') {
+      document.getElementById('map-wrapper').style.display = 'block';
+      document.getElementById('date-wrapper').style.display = 'none';
+      setTimeout(() => myChart.resize(), 50); 
+    } else {
+      document.getElementById('map-wrapper').style.display = 'none';
+      document.getElementById('date-wrapper').style.display = 'block';
+      renderDateView();
+    }
+  }
+
+  // ==========================================
+  // 4. 지도 렌더링 및 행정구역 드릴다운 관련
+  // ==========================================
+  function renderProvinceMap() {
+    document.getElementById('backBtn').style.display = 'none';
+    const provDates = {};
+    dateRecords.forEach(r => {
+      let tProv = r.province;
+      if(tProv) { if(!provDates[tProv]) provDates[tProv] = new Set(); provDates[tProv].add(r.date); }
+    });
+    const mapData = Object.keys(regionData).map(p => ({ name: p, value: provDates[p] ? provDates[p].size : 0 }));
+    
+    const option = {
+      tooltip: { formatter: '{b} <br/>방문 일수: {c}일' },
+      visualMap: { show: false, min: 1, max: 10, inRange: { color: ['#ffccd5', '#ff4757'] }, outOfRange: { color: ['#eeeeee'] } },
+      series: [{ type: 'map', map: 'korea_prov', roam: true, zoom: 1.2, label: { show: true, fontSize: 11 }, data: mapData }]
+    };
+    myChart.setOption(option, true);
+    myChart.off('click');
+    myChart.on('click', params => { if(provinceCodes[params.name]) drillDownToMunicipality(params.name); });
+  }
+
+  function drillDownToMunicipality(provinceName) {
+    document.getElementById('backBtn').style.display = 'block';
+    const provCode = provinceCodes[provinceName];
+    const districts = regionData[provinceName];
+    const filteredFeatures = municipalitiesGeoJson.features.filter(f => f.properties.code.startsWith(provCode));
+    const customMapName = 'map_' + provinceName;
+    echarts.registerMap(customMapName, { type: "FeatureCollection", features: filteredFeatures });
+
+    const distDates = {};
+    dateRecords.forEach(r => { if(r.region && districts.includes(r.region)) { if(!distDates[r.region]) distDates[r.region] = new Set(); distDates[r.region].add(r.date); }});
+    const mapData = districts.map(d => ({ name: d, value: distDates[d] ? distDates[d].size : 0 }));
+
+    const option = {
+      tooltip: { formatter: '{b} <br/>방문 일수: {c}일' },
+      visualMap: { show: false, min: 1, max: 10, inRange: { color: ['#ffccd5', '#ff4757'] }, outOfRange: { color: ['#eeeeee'] } },
+      series: [{ type: 'map', map: customMapName, roam: true, zoom: 1.1, label: { show: true, fontSize: 10 }, data: mapData }]
+    };
+    myChart.setOption(option, true);
+    myChart.off('click');
+    myChart.on('click', params => openModal(params.name));
+  }
+
+  function openModal(regionName) {
+    currentModalRegion = regionName;
+    document.getElementById('modal-title').innerText = regionName + "의 추억";
+    
+    const rRecords = dateRecords.filter(r => r.region === regionName);
+    if(rRecords.length === 0) { 
+      const today = new Date();
+      document.getElementById('modalFilterYear').value = today.getFullYear();
+      modalSelectedMonth = today.getMonth() + 1;
+      modalSelectedDay = null;
+    } else {
+      const latestRecord = rRecords.reduce((latest, current) => new Date(latest.date) > new Date(current.date) ? latest : current);
+      const [y, m, d] = latestRecord.date.split('-');
+      document.getElementById('modalFilterYear').value = y;
+      modalSelectedMonth = parseInt(m, 10);
+      modalSelectedDay = null; 
+    }
+    
+    initModalMonthButtons();
+    renderModalDateView();
+    document.getElementById('modal').style.display = 'flex';
+  }
+
+  function closeModal() { document.getElementById('modal').style.display = 'none'; }
+
+  // 공통 커스텀 알림창 함수
+  function showCustomAlert(msg) {
+    document.getElementById('custom-alert-msg').innerText = msg;
+    document.getElementById('custom-alert').style.display = 'flex';
+  }
+  
+  function closeCustomAlert() {
+    document.getElementById('custom-alert').style.display = 'none';
+  }
+
+  // 금액 콤마 포맷 함수
+  function formatComma(input) {
+    let value = input.value.replace(/[^0-9]/g, '');
+    input.value = value.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  }
+
+  // ==========================================
+  // 5. ✨ [신규 추가] 제미나이 AI 카드 추천 및 슬라이더 로직
+  // ==========================================
+  
+  // 캐러셀 좌우 이동 버튼 함수
+  function scrollCarousel(direction) {
+    const container = document.getElementById('ai-carousel');
+    const scrollAmount = container.clientWidth + 15; // 카드 한 장 너비 + 간격 여백
+    container.scrollBy({ left: direction * scrollAmount, behavior: 'smooth' });
+  }
+
+  // 사용자가 채운 8+3가지 조건을 수집하여 제미나이에게 전송하는 함수
+  function getAiRecommendation() {
+    // 1. 세분화된 지역 데이터 병합
+    const prov = document.getElementById('aiProvinceInput').value;
+    const dist = document.getElementById('aiDistrictInput').value;
+    const dong = document.getElementById('aiDongInput').value;
+    const fullRegion = `${prov} ${dist}` + (dong ? ` ${dong}` : '');
+
+    // 2. 데이트 테마 정리
+    let theme = document.getElementById('aiTheme').value;
+    if (theme === '직접 입력') theme = document.getElementById('aiThemeDirect').value;
+
+    // 3. 정밀 설정된 소요 시간 텍스트 조합
+    const days = document.getElementById('aiDays').value;
+    const hours = document.getElementById('aiHours').value;
+    const minutes = document.getElementById('aiMinutes').value;
+    const timeText = (days > 0 ? `${days}일 ` : '') + (hours > 0 ? `${hours}시간 ` : '') + (minutes > 0 ? `${minutes}분` : '');
+
+    // 4. 예산 수집
+    const budget = document.getElementById('aiBudget').value || "제한 없음";
+    
+    // 5. 이동수단 및 동선 소요시간 제한 조합
+    let transport = document.getElementById('aiTransport').value;
+    if (transport === '직접 입력') transport = document.getElementById('aiTransportDirect').value;
+    const transHour = document.getElementById('aiTransHour').value || 0;
+    const transMin = document.getElementById('aiTransMin').value || 30;
+    const transportText = `${transport} (이동 거리: ${transHour}시간 ${transMin}분 내외)`;
+
+    // 6~9. 포함/제외/공간선호/식사취향 필터값 수집
+    const include = document.getElementById('aiInclude').value || "특별히 없음";
+    const exclude = document.getElementById('aiExclude').value || "특별히 없음";
+    const space = document.getElementById('aiSpace').value;
+    const food = document.getElementById('aiFood').value || "제한 없음";
+    const count = document.getElementById('aiCount').value;
+
+    // 주차 대안 주차장 3곳을 유도하는 출력 규칙 세팅
+    const formatInstruction = "각 장소별로 [장소명, 주소, 특징, 장점, 단점, 주차 가능 여부]를 반드시 포함해줘. 만약 주차가 불가능하다면 해당 지역 주변에 이용 가능한 대안 주차장 3곳의 추천 정보도 함께 적어줘.";
+
+    // 💡 규칙(JSON) 구조 강제 프롬프트 설계
+    const prompt = `너는 데이트 코스 전문가야. 다음 조건에 맞춰서 딱 알맞은 ${count}곳의 장소를 추천해 줘.
+
+조건: 지역(${fullRegion}), 테마(${theme}), 소요시간(${timeText}), 예산(${budget}), 이동수단(${transportText}), 필수요소(${include}), 제외요소(${exclude}), 공간선호(${space}), 식사취향(${food})
+
+반드시 아래에 지정된 JSON 배열 구조의 형식으로만 대답해. 서론, 인사말, 맺음말, 그리고 마크다운 기호(\`\`\`json) 같은 부연 문자는 절대 포함하지 마. 오직 대괄호'['로 시작해서 ']'로 끝나는 순수 데이터만 출력해.
+[
+  {
+    "name": "장소명",
+    "address": "주소",
+    "feature": "특징 (어떤 분위기나 인테리어의 장소인지)",
+    "pros": "장점",
+    "cons": "단점",
+    "parking": "주차 가능 여부 및 대안 주차장 3곳 안내"
+  }
+]`;
+
+    const btn = document.querySelector('#recommend-app .submit-btn');
+    btn.innerText = "제미나이가 카드를 예쁘게 꾸미는 중입니다... ⏳";
+    btn.disabled = true;
+    
+    const resultBox = document.getElementById('ai-result-box');
+    resultBox.style.display = 'block';
+    resultBox.innerHTML = "<div style='text-align:center; color:#888; padding:30px 0;'>잠시만 기다려주세요.<br>가장 완벽한 코스를 찾고 있어요! 💡</div>";
+
+    // 구글 스크립트 서버 통신망 호출
+    google.script.run.withSuccessHandler(function(response) {
+      btn.innerText = "제미나이에게 물어보기 ✨";
+      btn.disabled = false;
+      
+      try {
+        // 제미나이가 출력한 텍스트에서 불필요한 마크다운 양식이 있다면 완벽 제거
+        let cleanJson = response.replace(/```json/g, '').replace(/```/g, '').trim();
+        let places = JSON.parse(cleanJson);
+        
+        let html = `<div style="text-align:center; color:#9b59b6; font-weight:bold; margin-bottom:5px; font-size:1.1em;">✨ 맞춤형 데이트 코스가 도착했습니다! ✨</div>`;
+        html += `<div style="text-align:center; color:#7f8c8d; font-size:0.9em; margin-bottom:10px;">(카드를 좌우로 넘겨보세요 ↔️)</div>`;
+        
+        // ◀ 버튼 및 슬라이더 시작
+        html += `<div class="ai-slider-wrapper">`;
+        html += `<button class="ai-nav-btn" onclick="scrollCarousel(-1)">&#10094;</button>`;
+        html += `<div class="carousel-container" id="ai-carousel">`;
+        
+        // JSON 배열 순회하며 모바일 전용 UI 카드 빌드
+        places.forEach((p, index) => {
+          html += `
+            <div class="carousel-card">
+              <h4><span style="color:#e74c3c; margin-right:5px;">${index + 1}.</span> ${p.name || '-'}</h4>
+              <p><span class="ai-badge">📍 주소</span> ${p.address || '-'}</p>
+              <p><span class="ai-badge">✨ 특징</span> ${p.feature || '-'}</p>
+              <p><span class="ai-badge">👍 장점</span> ${p.pros || '-'}</p>
+              <p><span class="ai-badge">👎 단점</span> ${p.cons || '-'}</p>
+              <p><span class="ai-badge">🚗 주차</span> ${p.parking || '-'}</p>
+            </div>
+          `;
+        });
+        
+        html += `</div>`;
+        html += `<button class="ai-nav-btn" onclick="scrollCarousel(1)">&#10095;</button>`; // ▶ 버튼
+        html += `</div>`;
+        
+        resultBox.innerHTML = html;
+        
+      } catch (e) {
+        // AI가 JSON 형식을 어겨 일반 줄글로 대답했을 경우의 백업 처리 예외처리
+        let formattedText = response.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+        resultBox.innerHTML = `<div style="color:#e74c3c; font-weight:bold; margin-bottom:15px;">앗! 카드 조립 중에 예외가 발생했어요. 대신 정성스러운 텍스트 버전으로 보여드릴게요!</div>` + formattedText;
+      }
+    }).callGeminiAPI(prompt);
+  }
+
+  // ==========================================
+  // 6. 브라우저 이벤트 리스너 바인딩
+  // ==========================================
+  window.addEventListener('resize', () => {
+    if(myChart) myChart.resize(); 
+    if(accountChart) accountChart.resize(); 
+  });
+  
+  window.onload = initApp;
+</script>

@@ -1,0 +1,252 @@
+<script>
+  // 💡 지역 선택 시 세부 '시/군/구' 옵션을 업데이트해 주는 함수
+  function updateDistrictOptions() {
+    const province = document.getElementById('provinceInput').value;
+    const districtInput = document.getElementById('districtInput');
+    districtInput.innerHTML = ''; 
+    if (regionData[province]) regionData[province].forEach(d => districtInput.add(new Option(d, d)));
+  }
+
+  // 💡 데이트 기록 탭의 리스트를 그려주는 함수
+  function renderDateView() {
+    const container = document.getElementById('date-list-container');
+    container.innerHTML = '';
+    
+    const selectedYear = document.getElementById('filterYear').value;
+    const selectedMonth = String(currentSelectedMonth).padStart(2, '0');
+    const yearMonthTarget = `${selectedYear}-${selectedMonth}`; 
+
+    const filteredRecords = dateRecords.filter(r => r.date.startsWith(yearMonthTarget));
+    const dayBtnContainer = document.getElementById('filterDayButtons');
+
+    if (filteredRecords.length === 0) {
+      dayBtnContainer.style.display = 'none'; 
+      container.innerHTML = `<p style="text-align:center; color:#888; padding: 30px 0;">${selectedYear}년 ${currentSelectedMonth}월에는 기록된 데이트가 없습니다. 🐾</p>`;
+      return;
+    }
+    dayBtnContainer.style.display = 'flex';
+
+    const uniqueDates = [...new Set(filteredRecords.map(r => r.date))].sort((a, b) => new Date(a) - new Date(b));
+    const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+
+    dayBtnContainer.innerHTML = '';
+
+    const allBtn = document.createElement('button');
+    allBtn.className = 'day-btn' + (currentSelectedDay === null ? ' active' : '');
+    allBtn.innerText = '전체';
+    allBtn.onclick = function() {
+      currentSelectedDay = null;
+      renderDateView();
+    };
+    dayBtnContainer.appendChild(allBtn);
+
+    uniqueDates.forEach(dateStr => {
+      const dayNum = parseInt(dateStr.split('-')[2]);
+      const dateObj = new Date(dateStr);
+      const dayOfWeek = dayNames[dateObj.getDay()];
+
+      const dayBtn = document.createElement('button');
+      dayBtn.className = 'day-btn' + (currentSelectedDay === dateStr ? ' active' : '');
+      dayBtn.innerText = `${dayNum}일(${dayOfWeek})`;
+      dayBtn.onclick = function() {
+        currentSelectedDay = dateStr;
+        renderDateView();
+      };
+      dayBtnContainer.appendChild(dayBtn);
+    });
+
+    let finalRecords = filteredRecords;
+    if (currentSelectedDay !== null) {
+      finalRecords = filteredRecords.filter(r => r.date === currentSelectedDay);
+    }
+
+    const groupedByDate = {};
+    finalRecords.forEach(r => { 
+      if (!groupedByDate[r.date]) groupedByDate[r.date] = []; 
+      groupedByDate[r.date].push(r); 
+    });
+    
+    const sortedDates = Object.keys(groupedByDate).sort((a, b) => new Date(a) - new Date(b));
+
+    sortedDates.forEach(date => {
+      let itemsHtml = '';
+      groupedByDate[date].forEach((record, index) => {
+        const contentHtml = record.content && record.content.trim() !== "" ? `<br/>📝 <b>내용:</b> ${record.content}` : "";
+        
+        itemsHtml += `
+          <div class="${index > 0 ? 'sub-item' : ''}" style="position:relative;">
+            <span class="tag">${record.category}</span>
+            <span class="location-badge badge-prov">📍 ${record.province}</span>
+            <span class="location-badge badge-region">${record.region}</span><br/>
+            📍 <b>장소:</b> ${record.place}${contentHtml}
+            <span style="position:absolute; right:0; top:0; cursor:pointer; font-size:1.3em;" title="수정하기" onclick="editDateRecordUI(${record.rowIdx})">✏️</span>
+          </div>
+        `;
+      });
+      
+      const dateObj = new Date(date);
+      const dayOfWeek = dayNames[dateObj.getDay()];
+      
+      container.innerHTML += `<div class="record-card"><strong>🗓 ${date}(${dayOfWeek})</strong><div style="margin-top: 10px;">${itemsHtml}</div></div>`;
+    });
+  }
+
+  // 💡 지도에서 특정 지역 클릭 시 뜨는 모달창 기록 렌더링 함수
+  function renderModalDateView() {
+    const container = document.getElementById('modal-body'); 
+    container.innerHTML = '';
+    const selectedYear = document.getElementById('modalFilterYear').value;
+    const selectedMonth = String(modalSelectedMonth).padStart(2, '0');
+    const yearMonthTarget = `${selectedYear}-${selectedMonth}`; 
+
+    const regionRecords = dateRecords.filter(r => r.region === currentModalRegion);
+    const filteredRecords = regionRecords.filter(r => r.date.startsWith(yearMonthTarget));
+    const dayBtnContainer = document.getElementById('modalFilterDayButtons');
+
+    if (filteredRecords.length === 0) {
+      dayBtnContainer.style.display = 'none'; 
+      container.innerHTML = `<p style="text-align:center; color:#888; padding: 30px 0;">${selectedYear}년 ${modalSelectedMonth}월에는 기록된 데이트가 없습니다.</p>`;
+      return;
+    }
+    dayBtnContainer.style.display = 'flex';
+
+    const uniqueDates = [...new Set(filteredRecords.map(r => r.date))].sort((a, b) => new Date(a) - new Date(b));
+    const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+
+    dayBtnContainer.innerHTML = '';
+    const allBtn = document.createElement('button');
+    allBtn.className = 'day-btn' + (modalSelectedDay === null ? ' active' : '');
+    allBtn.innerText = '전체';
+    allBtn.onclick = function() { modalSelectedDay = null; renderModalDateView(); };
+    dayBtnContainer.appendChild(allBtn);
+
+    uniqueDates.forEach(dateStr => {
+      const dayNum = parseInt(dateStr.split('-')[2]);
+      const dayOfWeek = dayNames[new Date(dateStr).getDay()];
+      const dayBtn = document.createElement('button');
+      dayBtn.className = 'day-btn' + (modalSelectedDay === dateStr ? ' active' : '');
+      dayBtn.innerText = `${dayNum}일(${dayOfWeek})`;
+      dayBtn.onclick = function() { modalSelectedDay = dateStr; renderModalDateView(); };
+      dayBtnContainer.appendChild(dayBtn);
+    });
+
+    let finalRecords = modalSelectedDay !== null ? filteredRecords.filter(r => r.date === modalSelectedDay) : filteredRecords;
+
+    const grouped = {}; 
+    finalRecords.forEach(r => { if(!grouped[r.date]) grouped[r.date]=[]; grouped[r.date].push(r); });
+    const sortedDates = Object.keys(grouped).sort((a, b) => new Date(a) - new Date(b));
+
+    sortedDates.forEach(date => {
+      let html = '';
+      grouped[date].forEach((r, i) => {
+        const contentHtml = r.content && r.content.trim() !== "" ? `<br/>📝 <b>내용:</b> ${r.content}` : "";
+        html += `<div class="${i > 0 ? 'sub-item' : ''}">
+          <span class="tag">${r.category}</span>
+          <span class="location-badge badge-prov">📍 ${r.province}</span>
+          <span class="location-badge badge-region">${r.region}</span><br/>
+          📍 <b>장소:</b> ${r.place}${contentHtml}
+        </div>`;
+      });
+      const dayOfWeek = dayNames[new Date(date).getDay()];
+      container.innerHTML += `<div class="record-card"><strong>🗓 ${date}(${dayOfWeek})</strong><div style="margin-top:10px;">${html}</div></div>`;
+    });
+  }
+
+  // 💡 데이트 기록 '✏️' 아이콘 클릭 시 수정 모드로 세팅하는 함수
+  function editDateRecordUI(rowIdx) {
+    const record = dateRecords.find(r => r.rowIdx === rowIdx);
+    if(!record) return;
+
+    editingDateRow = rowIdx;
+    const [y, m, d] = record.date.split('-');
+    document.getElementById('yearInput').value = y;
+    document.getElementById('monthInput').value = parseInt(m, 10);
+    document.getElementById('dayInput').value = parseInt(d, 10);
+    
+    document.getElementById('provinceInput').value = record.province;
+    updateDistrictOptions();
+    document.getElementById('districtInput').value = record.region;
+    
+    document.getElementById('placeInput').value = record.place;
+    document.getElementById('categoryInput').value = record.category;
+    document.getElementById('contentInput').value = record.content;
+    
+    document.getElementById('syncAccAmountInput').parentElement.style.display = 'none'; // 수정시 통장 연동 숨김
+    
+    const btn = document.querySelector('#date-app .submit-btn');
+    btn.innerText = "기록 수정하기";
+    document.querySelector('#date-app .form-container').scrollIntoView({behavior: "smooth"});
+  }
+
+  // 💡 데이트 기록 저장(또는 수정) 버튼을 눌렀을 때 작동하는 함수
+  function saveDateData() {
+    const dateStr = `${document.getElementById('yearInput').value}-${document.getElementById('monthInput').value.padStart(2,'0')}-${document.getElementById('dayInput').value.padStart(2,'0')}`;
+    const regionVal = document.getElementById('districtInput').value;
+    const placeVal = document.getElementById('placeInput').value;
+    const contentVal = document.getElementById('contentInput').value;
+    const categoryVal = document.getElementById('categoryInput').value;
+
+    const record = {
+      date: dateStr,
+      province: document.getElementById('provinceInput').value, 
+      region: regionVal,     
+      place: placeVal,
+      category: categoryVal,
+      content: contentVal
+    };
+    
+    if(!record.region || !record.place) { showCustomAlert("장소명을 입력해주세요!"); return; }
+
+    const btn = document.querySelector('#date-app .submit-btn'); 
+    btn.innerText = "처리 중..."; btn.disabled = true;
+
+    // 수정 모드일 때
+    if (editingDateRow) {
+      google.script.run.withSuccessHandler(() => {
+        showCustomAlert("추억이 성공적으로 수정되었습니다! 🎉");
+        resetDateForm(btn);
+      }).updateDateRecord(editingDateRow, record);
+      return; 
+    }
+
+    // 통장 자동 연동 로직
+    const accAmountRaw = document.getElementById('syncAccAmountInput').value;
+    const accAmount = accAmountRaw.replace(/,/g, '');
+    let accRecord = null;
+    
+    if (accAmount && Number(accAmount) > 0) {
+      accRecord = {
+        date: dateStr,
+        type: "출금",
+        category: categoryVal,
+        amount: accAmount,
+        content: `[${regionVal}] ${placeVal}` + (contentVal ? ` - ${contentVal}` : '') 
+      };
+    }
+    
+    google.script.run.withSuccessHandler(() => {
+      if (accRecord) {
+        google.script.run.withSuccessHandler(() => {
+          showCustomAlert("추억과 통장 내역이 한 번에 저장되었습니다! 🎉");
+          resetDateForm(btn);
+        }).saveAccountRecord(accRecord);
+      } else {
+        showCustomAlert("추억이 추가되었습니다!");
+        resetDateForm(btn);
+      }
+    }).saveDateRecord(record);
+  }
+
+  // 💡 데이터 저장 후 폼을 깔끔하게 초기화하는 함수
+  function resetDateForm(btn) {
+    btn.innerText = "기록 저장하기"; btn.disabled = false;
+    document.getElementById('placeInput').value = ''; 
+    document.getElementById('contentInput').value = '';
+    document.getElementById('syncAccAmountInput').value = ''; 
+    document.getElementById('syncAccAmountInput').parentElement.style.display = 'block';
+    editingDateRow = null;
+    
+    google.script.run.withSuccessHandler(data => { dateRecords = data; renderProvinceMap(); renderDateView(); }).getDateData();
+    loadAccountData(); 
+  }
+</script>

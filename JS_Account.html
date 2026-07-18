@@ -1,0 +1,274 @@
+<script>
+  // 💡 통장 데이터 불러오기 호출 함수
+  function loadAccountData() {
+    google.script.run.withSuccessHandler(function(data) {
+      accountRecords = data;
+      renderAccountView();
+    }).getAccountData();
+  }
+
+  // 💡 모임통장 화면 렌더링 (상단 전체 잔액 유지 + 하단 월별/일별 통계 요약 박스)
+  function renderAccountView() {
+    const container = document.getElementById('account-list-container');
+    container.innerHTML = '';
+    
+    const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+    const selectedYear = document.getElementById('accFilterYear').value;
+    const selectedMonth = String(accCurrentSelectedMonth).padStart(2, '0');
+    const yearMonthTarget = `${selectedYear}-${selectedMonth}`; 
+
+    // 1. 상단 카드: 전체 기간 총 잔액 계산
+    let globalIn = 0; let globalOut = 0;
+    accountRecords.forEach(r => {
+      if(r.type === '입금') globalIn += Number(r.amount);
+      else globalOut += Number(r.amount);
+    });
+    const globalBalance = globalIn - globalOut;
+
+    document.querySelector('.balance-title').innerText = "우리의 모임 통장 전체 잔액";
+    document.getElementById('total-balance').innerText = globalBalance.toLocaleString() + "원";
+    document.getElementById('total-in').innerText = globalIn.toLocaleString() + "원";
+    document.getElementById('total-out').innerText = globalOut.toLocaleString() + "원";
+
+    // 2. 하단 필터용 월별 데이터 필터링 및 수입/지출 계산
+    const filteredRecords = accountRecords.filter(r => r.date.startsWith(yearMonthTarget));
+    let monthIn = 0; let monthOut = 0;
+    filteredRecords.forEach(r => {
+      if(r.type === '입금') monthIn += Number(r.amount); else monthOut += Number(r.amount);
+    });
+
+    const dayBtnContainer = document.getElementById('accFilterDayButtons');
+    const summaryBox = document.getElementById('acc-day-summary');
+
+    // 월별 요약 텍스트 생성 (항상 표시)
+    let summaryHtml = `<div style="font-weight:bold; color:#444; margin-bottom:8px; font-size:1.1em;">📅 ${selectedYear}년 ${accCurrentSelectedMonth}월 통계</div>
+                       <div style="margin-bottom:8px;"><span style="color:#d63031;">해당 월 입금: +${monthIn.toLocaleString()}원</span> &nbsp;|&nbsp; 
+                       <span style="color:#0984e3;">해당 월 출금: -${monthOut.toLocaleString()}원</span></div>`;
+
+    const expenseStats = {};
+
+    if (filteredRecords.length === 0) {
+      dayBtnContainer.style.display = 'none';
+      summaryBox.style.display = 'block';
+      summaryBox.innerHTML = summaryHtml + `<div style="color:#888; font-size:0.9em; margin-top:10px;">이번 달 내역이 없습니다.</div>`;
+    } else {
+      dayBtnContainer.style.display = 'flex';
+      
+      // 일자별 버튼 생성
+      const uniqueDates = [...new Set(filteredRecords.map(r => r.date))].sort((a, b) => new Date(a) - new Date(b));
+      dayBtnContainer.innerHTML = '';
+      
+      const allBtn = document.createElement('button');
+      allBtn.className = 'day-btn' + (accCurrentSelectedDay === null ? ' active' : '');
+      allBtn.innerText = '전체';
+      allBtn.onclick = function() { accCurrentSelectedDay = null; renderAccountView(); };
+      dayBtnContainer.appendChild(allBtn);
+
+      uniqueDates.forEach(dateStr => {
+        const dayNum = parseInt(dateStr.split('-')[2]);
+        const dayOfWeek = dayNames[new Date(dateStr).getDay()];
+        const dayBtn = document.createElement('button');
+        dayBtn.className = 'day-btn' + (accCurrentSelectedDay === dateStr ? ' active' : '');
+        dayBtn.innerText = `${dayNum}일(${dayOfWeek})`;
+        dayBtn.onclick = function() { accCurrentSelectedDay = dateStr; renderAccountView(); };
+        dayBtnContainer.appendChild(dayBtn);
+      });
+
+      // 3. 일자 필터 적용 및 특정 일자 눌렀을 때만 일일 요약 추가 표시
+      let finalRecords = filteredRecords;
+      if (accCurrentSelectedDay !== null) {
+        finalRecords = filteredRecords.filter(r => r.date === accCurrentSelectedDay);
+        
+        const sortedAll = [...accountRecords].sort((a,b) => new Date(a.date) - new Date(b.date));
+        let runningBalance = 0;
+        for(let r of sortedAll) {
+          runningBalance += (r.type === '입금' ? Number(r.amount) : -Number(r.amount));
+          if(r.date === accCurrentSelectedDay && sortedAll[sortedAll.indexOf(r) + 1]?.date !== accCurrentSelectedDay) break;
+        }
+
+        let dayIn = 0; let dayOut = 0;
+        finalRecords.forEach(r => {
+          if(r.type === '입금') dayIn += Number(r.amount); else dayOut += Number(r.amount);
+        });
+        
+        summaryHtml += `<div style="border-top:1px dashed #74b9ff; margin:10px 0; padding-top:10px;">
+                          <div style="font-weight:bold; color:#333; margin-bottom:5px;">💰 ${parseInt(accCurrentSelectedDay.split('-')[2])}일 최종 잔액: ${runningBalance.toLocaleString()}원</div>
+                          <span style="color:#d63031; font-size:0.9em;">입금: +${dayIn.toLocaleString()}원</span> &nbsp;|&nbsp; 
+                          <span style="color:#0984e3; font-size:0.9em;">출금: -${dayOut.toLocaleString()}원</span>
+                        </div>`;
+      }
+      
+      summaryBox.style.display = 'block';
+      summaryBox.innerHTML = summaryHtml;
+
+      const sortedRecords = [...finalRecords].sort((a, b) => new Date(b.date) - new Date(a.date));
+      
+      // 리스트 출력 및 소비 통계 데이터 누적
+      sortedRecords.forEach(r => {
+        const amt = Number(r.amount);
+        if (r.type === '출금') {
+          const cleanCat = r.category || '기타 지출';
+          if (!expenseStats[cleanCat]) expenseStats[cleanCat] = 0;
+          expenseStats[cleanCat] += amt;
+        }
+
+        const isIncome = r.type === '입금';
+        container.innerHTML += `
+          <div class="acc-item" style="position:relative;">
+            <div class="acc-info">
+              <span class="acc-date">${r.date || '날짜 없음'}</span>
+              <span class="tag account-tag">${r.category || '미분류'}</span>
+              <span class="acc-content">${r.content}</span>
+            </div>
+            <div class="acc-amt ${isIncome ? 'amt-in' : 'amt-out'}">
+              ${isIncome ? '+' : '-'}${amt.toLocaleString()}원
+            </div>
+            <span style="position:absolute; right:0; top:4px; cursor:pointer; font-size:1.1em;" title="수정하기" onclick="editAccountRecordUI(${r.rowIdx})">✏️</span>
+          </div>
+        `;
+      });
+    }
+
+    renderAccountPieChart(expenseStats);
+  }
+
+  // 💡 통장 기록 '✏️' 아이콘 클릭 시 수정 모드로 세팅하는 함수
+  function editAccountRecordUI(rowIdx) {
+    const record = accountRecords.find(r => r.rowIdx === rowIdx);
+    if(!record) return;
+
+    editingAccRow = rowIdx;
+    const [y, m, d] = record.date.split('-');
+    document.getElementById('accYearInput').value = y;
+    document.getElementById('accMonthInput').value = parseInt(m, 10);
+    document.getElementById('accDayInput').value = parseInt(d, 10);
+    
+    document.getElementById('accTypeInput').value = record.type;
+    updateAccountCategoryOptions();
+    document.getElementById('accCategoryInput').value = record.category;
+    
+    const amtInput = document.getElementById('accAmountInput');
+    amtInput.value = record.amount;
+    formatComma(amtInput); 
+    
+    document.getElementById('accContentInput').value = record.content;
+    
+    // 수정용 버튼들 보이기, 기본 저장 버튼 숨기기
+    document.getElementById('acc-edit-btns').style.display = 'flex';
+    document.getElementById('acc-add-btn').style.display = 'none';
+
+    document.querySelector('#account-app .form-container').scrollIntoView({behavior: "smooth"});
+  }
+
+  // 💡 통장 폼 초기화 함수 (저장 완료 후 또는 수정 취소 클릭 시 실행)
+  function resetAccForm() {
+    document.getElementById('accAmountInput').value = '';
+    document.getElementById('accContentInput').value = '';
+    editingAccRow = null;
+    
+    // 다시 기본 저장 버튼 디자인으로 원상복구
+    document.getElementById('acc-edit-btns').style.display = 'none';
+    document.getElementById('acc-add-btn').style.display = 'block';
+
+    const addBtn = document.getElementById('acc-add-btn');
+    addBtn.innerText = "내역 저장하기";
+    addBtn.disabled = false;
+    const editBtn = document.querySelector('#acc-edit-btns .blue');
+    editBtn.innerText = "내역 수정하기";
+    editBtn.disabled = false;
+
+    loadAccountData();
+  }
+
+  // 💡 소비 통계 원형 그래프 (항목별 고정 색상 적용)
+  function renderAccountPieChart(statsData) {
+    const categoryColors = {
+      "🍕 식당": "#ff7675",      // 연한 빨강
+      "☕ 카페/디저트": "#fdcb6e", // 노랑주황
+      "🚗 교통/유류비": "#74b9ff", // 파랑
+      "🏨 숙박": "#a29bfe",      // 보라
+      "🎬 문화/여가": "#55efc4",   // 민트
+      "🛍️ 쇼핑": "#ffeaa7",      // 연노랑
+      "💸 기타 지출": "#b2bec3"    // 회색
+    };
+
+    const chartData = Object.keys(statsData).map(key => {
+      return { 
+        name: key, 
+        value: statsData[key],
+        itemStyle: { color: categoryColors[key] || "#dfe6e9" }
+      };
+    });
+
+    if (chartData.length === 0) {
+      accountChart.setOption({
+        title: { text: "💡 출금 내역이 없어 통계가 비어있어요!", left: "center", top: "middle", textStyle: { color: "#aaa", fontSize: 14 } },
+        series: []
+      }, true);
+      return;
+    }
+
+    const option = {
+      title: { text: '🛍️ 화면에 보이는 소비 통계', left: 'center', textStyle: { color: '#444', fontSize: 15 } },
+      tooltip: { trigger: 'item', formatter: '{b}<br/><b>{c}원</b> ({d}%)' },
+      legend: { bottom: '0', left: 'center', icon: 'circle', itemGap: 8, textStyle: { fontSize: 11 } },
+      series: [{
+        name: '지출 분류', type: 'pie', radius: ['40%', '65%'], center: ['50%', '45%'], avoidLabelOverlap: false,
+        itemStyle: { borderRadius: 8, borderColor: '#fff', borderWidth: 2 },
+        label: { show: false }, emphasis: { label: { show: true, fontSize: 14, fontWeight: 'bold' } },
+        data: chartData
+      }]
+    };
+    accountChart.setOption(option, true);
+  }
+
+  // 💡 통장 내역 저장(또는 수정) 버튼을 눌렀을 때 작동하는 함수
+  function saveAccountData() {
+    const accAmountRaw = document.getElementById('accAmountInput').value;
+    const accAmount = accAmountRaw.replace(/,/g, '');
+
+    const record = {
+      date: `${document.getElementById('accYearInput').value}-${document.getElementById('accMonthInput').value.padStart(2,'0')}-${document.getElementById('accDayInput').value.padStart(2,'0')}`,
+      type: document.getElementById('accTypeInput').value,
+      category: document.getElementById('accCategoryInput').value,
+      amount: accAmount, 
+      content: document.getElementById('accContentInput').value
+    };
+
+    if (!record.amount || !record.content) {
+      showCustomAlert("금액과 내용을 모두 입력해주세요!");
+      return;
+    }
+
+    const btn = editingAccRow ? document.querySelector('#acc-edit-btns .blue') : document.getElementById('acc-add-btn');
+    btn.innerText = "처리 중...";
+    btn.disabled = true;
+
+    if (editingAccRow) {
+      google.script.run.withSuccessHandler(function() {
+        showCustomAlert("통장 내역이 성공적으로 수정되었습니다! 🎉");
+        resetAccForm(); 
+      }).updateAccountRecord(editingAccRow, record);
+    } else {
+      google.script.run.withSuccessHandler(function() {
+        showCustomAlert("통장 내역이 저장되었습니다!");
+        resetAccForm(); 
+      }).saveAccountRecord(record);
+    }
+  }
+
+  // 💡 [복구됨] 누락되었던 통장 분류 옵션 업데이트 함수
+  function updateAccountCategoryOptions() {
+    const type = document.getElementById('accTypeInput').value;
+    const catSelect = document.getElementById('accCategoryInput');
+    catSelect.innerHTML = '';
+
+    if (type === '출금') {
+      const outCats = ["🍕 식당", "☕ 카페/디저트", "🚗 교통/유류비", "🏨 숙박", "🎬 문화/여가", "🛍️ 쇼핑", "💸 기타 지출"];
+      outCats.forEach(c => catSelect.add(new Option(c, c)));
+    } else {
+      const inCats = ["💰 정기 모임비", "💵 기타 입금"];
+      inCats.forEach(c => catSelect.add(new Option(c, c)));
+    }
+  }
+</script>

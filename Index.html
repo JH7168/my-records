@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+  
+  <!-- 🎨 디자인(CSS) 파일 불러오기 -->
+  <?!= HtmlService.createHtmlOutputFromFile('CSS').getContent(); ?>
+</head>
+<body>
+
+  <div class="container">
+    
+    <!-- 1️⃣ 홈 화면 -->
+    <div id="home-screen">
+      <div class="home-title">정환❤️선영</div>
+      <div class="menu-buttons">
+        <button class="menu-btn btn-date" onclick="navigate('date')">데이트 기록</button>
+        <button class="menu-btn btn-account" onclick="navigate('account')">통장 관리</button>
+        <button class="menu-btn btn-recommend" onclick="navigate('recommend')">데이트 추천</button>
+      </div>
+    </div>
+
+    <!-- 2️⃣ 데이트 기록 화면 -->
+    <div id="date-app" class="app-section">
+      <div class="app-header">
+        <button class="go-home-btn" onclick="navigate('home')">🏠 홈으로</button>
+        <h2>소중한 데이트 기록</h2>
+      </div>
+
+      <div class="tab-container">
+        <button id="tab-map" class="tab-btn active" onclick="switchDateTab('map')">🗺️ 지도 보기</button>
+        <button id="tab-date" class="tab-btn" onclick="switchDateTab('date')">📅 날짜로 보기</button>
+      </div>
+
+      <div class="map-wrapper" id="map-wrapper">
+        <button id="backBtn" onclick="renderProvinceMap()">↩ 전국 지도로 돌아가기</button>
+        <div id="map-container"></div>
+      </div>
+      
+      <div id="date-wrapper">
+        <div class="filter-box">
+          <select id="filterYear" class="year-select" onchange="currentSelectedDay=null; renderDateView();"></select>
+          <div id="filterMonthButtons" class="month-buttons-wrapper"></div>
+          <div id="filterDayButtons" class="day-buttons-wrapper" style="display: flex;"></div>
+        </div>
+        <div id="date-list-container"></div>
+      </div>
+
+      <div class="form-container">
+        <h3>새로운 추억 추가하기</h3>
+        
+        <div style="background: #fff5f6; padding: 20px; border-radius: 12px; border: 1px solid #ffe3e7; margin-bottom: 15px;">
+          <div class="form-group">
+            <label style="color: #ff6b81;">📅 날짜</label>
+            <div class="flex-inputs">
+              <select id="yearInput" style="width: 30%;"></select>년
+              <select id="monthInput" style="width: 30%;"></select>월
+              <select id="dayInput" style="width: 30%;"></select>일
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label style="color: #ff6b81;">📍 지역</label>
+            <div class="flex-inputs">
+              <select id="provinceInput" onchange="updateDistrictOptions()"></select>
+              <select id="districtInput"></select>
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label style="color: #ff6b81;">🏠 장소</label>
+            <input type="text" id="placeInput" placeholder="방문한 장소명">
+          </div>
+          
+          <div class="form-group">
+            <label style="color: #ff6b81;">🏷️ 분류</label>
+            <select id="categoryInput"></select>
+          </div>
+          
+          <div class="form-group">
+            <label style="color: #ff6b81;">📝 내용</label>
+            <input type="text" id="contentInput" placeholder="어떤 음식을 먹었는지, 무엇을 했는지 적어주세요.">
+          </div>
+
+          <div class="form-group" style="margin-bottom: 0;">
+            <label style="color: #ff6b81;">💳 결제 금액 (원)</label>
+            <input type="text" id="syncAccAmountInput" placeholder="금액을 적으시면 모임 통장에도 기록됩니다." oninput="formatComma(this)">
+          </div>
+        </div>
+
+        <button class="submit-btn" onclick="saveDateData()">기록 저장하기</button>
+      </div>
+    </div>
+
+    <!-- 3️⃣ 모임 통장 관리 화면 -->
+    <div id="account-app" class="app-section">
+      <div class="app-header">
+        <button class="go-home-btn" onclick="navigate('home')">🏠 홈으로</button>
+        <h2 style="color: #0984e3;">모임 통장 관리</h2>
+      </div>
+
+      <div class="balance-card">
+        <div class="balance-title">우리의 모임 통장 전체 잔액</div>
+        <div class="balance-amount" id="total-balance">0원</div>
+        <div class="balance-details">
+          <div class="detail-item">
+            <span>총 입금</span>
+            <strong id="total-in">0원</strong>
+          </div>
+          <div class="detail-item">
+            <span>총 출금</span>
+            <strong id="total-out">0원</strong>
+          </div>
+        </div>
+      </div>
+
+      <div class="filter-box">
+        <select id="accFilterYear" class="year-select" onchange="accCurrentSelectedDay=null; renderAccountView();"></select>
+        <div id="accFilterMonthButtons" class="month-buttons-wrapper"></div>
+        <div id="accFilterDayButtons" class="day-buttons-wrapper" style="display: none;"></div>
+      </div>
+      
+      <div id="acc-day-summary" style="display:none; background:#fff; padding:15px; border-radius:10px; margin-bottom:15px; box-shadow:0 2px 4px rgba(0,0,0,0.05); text-align:center; font-size:15px; border:2px solid #74b9ff;"></div>
+
+      <div id="account-chart-container"></div>
+
+      <div class="account-list" id="account-list-container">
+        <p style="text-align:center; color:#888;">내역을 불러오는 중입니다...</p>
+      </div>
+
+      <div class="form-container">
+        <h3 style="color: #0984e3;">새로운 내역 추가</h3>
+        <div class="form-group">
+          <label>날짜</label>
+          <div class="flex-inputs">
+            <select id="accYearInput" style="width: 30%;"></select>년
+            <select id="accMonthInput" style="width: 30%;"></select>월
+            <select id="accDayInput" style="width: 30%;"></select>일
+          </div>
+        </div>
+        <div class="form-group">
+          <label>구분</label>
+          <select id="accTypeInput" onchange="updateAccountCategoryOptions()">
+            <option value="출금">출금 (사용하기)</option>
+            <option value="입금">입금 (채워넣기)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>분류</label>
+          <select id="accCategoryInput"></select>
+        </div>
+        <div class="form-group">
+          <label>금액 (원)</label>
+          <input type="text" id="accAmountInput" placeholder="예: 50,000" oninput="formatComma(this)">
+        </div>
+        <div class="form-group">
+          <label>내용</label>
+          <input type="text" id="accContentInput" placeholder="예: 홍대 파스타, 2월 회비 등">
+        </div>
+        
+        <div id="acc-edit-btns" style="display:none; gap:10px;">
+          <button class="submit-btn blue" onclick="saveAccountData()">내역 수정하기</button>
+          <button class="submit-btn" style="background:#aaa;" onclick="resetAccForm()">수정 취소</button>
+        </div>
+        <button id="acc-add-btn" class="submit-btn blue" onclick="saveAccountData()">내역 저장하기</button>
+      </div>
+    </div>
+
+    <!-- 4️⃣ 데이트 추천 화면 (디테일 폼 적용) -->
+    <div id="recommend-app" class="app-section">
+      <div class="app-header">
+        <button class="go-home-btn" onclick="navigate('home')">🏠 홈으로</button>
+        <h2 style="color: #9b59b6;">데이트 코스 추천</h2>
+      </div>
+
+      <div class="form-container">
+        <h3 style="color: #8e44ad; margin-top:0;">데이트 조건을 세밀하게 알려주세요 🤖</h3>
+        
+        <div style="background: #f4f1ea; padding: 20px; border-radius: 12px; margin-bottom: 15px;">
+          
+          <!-- 1. 지역 -->
+          <div class="form-group">
+            <label>📍 1. 데이트 지역</label>
+            <div class="flex-inputs" style="margin-bottom: 8px;">
+              <select id="aiProvinceInput" onchange="updateAiDistrictOptions()" style="width: 50%;"></select>
+              <select id="aiDistrictInput" style="width: 50%;"></select>
+            </div>
+            <input type="text" id="aiDongInput" placeholder="동/읍/면 입력 (선택사항, 안 적어도 무방합니다)">
+          </div>
+          
+          <!-- 2. 테마 -->
+          <div class="form-group">
+            <label>🎈 2. 데이트 테마</label>
+            <select id="aiTheme" onchange="toggleDirectInput(this, 'aiThemeDirect')">
+              <option value="식당 (맛집 탐방)">식당 (맛집 탐방)</option>
+              <option value="편안한 힐링/휴식">편안한 힐링/휴식</option>
+              <option value="활동적인 스포츠/액티비티">활동적인 스포츠/액티비티</option>
+              <option value="문화생활 (전시, 공연, 영화 등)">문화생활 (전시, 공연, 영화 등)</option>
+              <option value="직접 입력">직접 입력</option>
+            </select>
+            <input type="text" id="aiThemeDirect" placeholder="원하시는 테마를 직접 적어주세요" style="display:none; margin-top:8px;">
+          </div>
+
+          <!-- 3. 소요 시간 -->
+          <div class="form-group">
+            <label>⏰ 3. 소요 시간</label>
+            <div class="flex-inputs">
+              <select id="aiDays" style="width: 30%;"></select>일
+              <select id="aiHours" style="width: 30%;"></select>시간
+              <select id="aiMinutes" style="width: 30%;"></select>분
+            </div>
+          </div>
+
+          <!-- 4. 예산 -->
+          <div class="form-group">
+            <label>💰 4. 예산</label>
+            <input type="text" id="aiBudget" placeholder="예: 5만원, 10만 원 내외 등 자유롭게 적어주세요">
+          </div>
+
+          <!-- 5. 이동 수단 -->
+          <div class="form-group">
+            <label>🚗 5. 이동 수단</label>
+            <select id="aiTransport" onchange="toggleDirectInput(this, 'aiTransportDirect')" style="margin-bottom: 8px;">
+              <option value="자차">자차</option>
+              <option value="대중교통">대중교통</option>
+              <option value="도보">도보</option>
+              <option value="직접 입력">직접 입력</option>
+            </select>
+            <input type="text" id="aiTransportDirect" placeholder="어떻게 이동하시나요?" style="display:none; margin-bottom:8px;">
+            
+            <div class="flex-inputs">
+              <input type="number" id="aiTransHour" placeholder="0" style="width: 60px;">시간
+              <input type="number" id="aiTransMin" placeholder="30" style="width: 60px;">분 거리 내외
+            </div>
+          </div>
+
+          <!-- 6. 포함 요소 -->
+          <div class="form-group">
+            <label>✨ 6. 꼭 있었으면 하는 요소</label>
+            <input type="text" id="aiInclude" placeholder="예: 오션뷰, 맛있는 디저트, 사진 찍기 좋은 곳">
+          </div>
+
+          <!-- 7. 제외 요소 -->
+          <div class="form-group">
+            <label>🚫 7. 피하고 싶은 요소</label>
+            <input type="text" id="aiExclude" placeholder="예: 웨이팅 긴 곳, 사람 많은 핫플, 시끄러운 곳">
+          </div>
+          
+          <!-- 8. 공간 선호도 -->
+          <div class="form-group">
+            <label>🌤️ 8. 공간 선호도 (날씨 대비)</label>
+            <select id="aiSpace">
+              <option value="실내 위주 (에어컨/히터 빵빵한 곳)">실내 위주 (에어컨/히터 빵빵한 곳)</option>
+              <option value="야외 위주 (산책, 풍경 감상)">야외 위주 (산책, 풍경 감상)</option>
+              <option value="실내와 야외를 적절히 섞어서">실내와 야외를 적절히 섞어서</option>
+              <option value="상관없음">상관없음</option>
+            </select>
+          </div>
+
+          <!-- 9. 식사 취향 -->
+          <div class="form-group">
+            <label>🍽️ 9. 식사 취향</label>
+            <input type="text" id="aiFood" placeholder="예: 오늘은 무조건 고기!, 해산물은 제외해줘">
+          </div>
+
+          <!-- 10. 추천 개수 -->
+          <div class="form-group">
+            <label>🎯 10. 장소 추천 개수</label>
+            <div class="flex-inputs">
+              <select id="aiCount" style="width: 100px;"></select>개 추천받기
+            </div>
+          </div>
+
+          <!-- 11. 추천 형식 (고정 안내) -->
+          <div class="form-group">
+            <label>📋 11. 추천 형식 (고정 적용)</label>
+            <div style="font-size: 0.85em; color: #555; background: #fff; padding: 10px; border: 1px solid #ccc; border-radius: 5px;">
+              장소명, 주소, 특징, 장점, 단점, 주차 가능 여부<br>
+              (주차가 불가능하다면 주변 주차장 3곳 추천 포함)
+            </div>
+          </div>
+        </div>
+
+        <button class="submit-btn" style="background:#9b59b6;" onclick="getAiRecommendation()">제미나이에게 물어보기 ✨</button>
+      </div>
+
+      <div id="ai-result-box" style="display:none; background:white; padding:20px; border-radius:15px; margin-top:20px; box-shadow:0 4px 6px rgba(0,0,0,0.1); line-height:1.6; white-space: pre-wrap;"></div>
+    </div>
+
+  </div>
+
+  <!-- 모달창 및 알림창 -->
+  <div id="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="modal-title">지역명</h2>
+        <span class="close-btn" onclick="closeModal()">&times;</span>
+      </div>
+      <div class="filter-box" id="modal-filter-box">
+        <select id="modalFilterYear" class="year-select" onchange="modalSelectedDay=null; renderModalDateView();"></select>
+        <div id="modalFilterMonthButtons" class="month-buttons-wrapper"></div>
+        <div id="modalFilterDayButtons" class="day-buttons-wrapper" style="display: none;"></div>
+      </div>
+      <div id="modal-body"></div>
+    </div>
+  </div>
+
+  <div id="custom-alert" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 2000;">
+    <div style="background: white; padding: 25px; border-radius: 15px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 80%; max-width: 300px;">
+      <p id="custom-alert-msg" style="font-size: 16px; margin-bottom: 20px; font-weight: bold; color: #333; word-break: keep-all; line-height: 1.5;"></p>
+      <button onclick="closeCustomAlert()" style="background: #ff6b81; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%; font-size: 15px;">확인</button>
+    </div>
+  </div>
+
+  <!-- ⚙️ 동작(JS) 파일들 불러오기 -->
+  <?!= HtmlService.createHtmlOutputFromFile('JS_Common').getContent(); ?>
+  <?!= HtmlService.createHtmlOutputFromFile('JS_Date').getContent(); ?>
+  <?!= HtmlService.createHtmlOutputFromFile('JS_Account').getContent(); ?>
+  
+</body>
+</html>
