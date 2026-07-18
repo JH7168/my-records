@@ -183,8 +183,11 @@ function updateAccountRecord(rowIdx, record) {
 
 // === [데이트 추천] 제미나이 API 연동 ===
 function callGeminiAPI(prompt) {
-  // 💡 입력하신 API 키가 적용되어 있습니다. (주의: 이 키는 절대 외부에 공개되지 않도록 조심해 주세요!)
-  const apiKey = "[ROTATED-AND-REVOKED-KEY-REMOVED]"; 
+  // 💡 API 키는 코드에 직접 저장하지 않고 PropertiesService(스크립트 속성)에서 불러옵니다.
+  const apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+  if (!apiKey) {
+    return "앗! API 키가 설정되어 있지 않습니다. Apps Script 편집기의 [프로젝트 설정 > 스크립트 속성]에서 GEMINI_API_KEY를 등록해 주세요.";
+  }
   const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + apiKey;
 
   const payload = {
