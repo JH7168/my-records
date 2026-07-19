@@ -12,6 +12,14 @@
   .dday-display { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; color: #ff6b81; font-size: 1em; }
   .dday-display strong { font-size: 1.3em; }
   .dday-date { color: #aaa; font-size: 0.85em; }
+
+  /* 🗺️💬 홈 화면 요약 (총 데이트/지역 수, 오늘의 추억, 다음 데이트 예정) */
+  .home-summary { margin-bottom: 25px; display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: 320px; }
+  .home-stat { color: #636e72; font-size: 0.9em; }
+  .home-memory, .home-upcoming { border-radius: 10px; padding: 8px 14px; font-size: 0.85em; text-align: center; word-break: keep-all; }
+  .home-memory { background: #fff5f6; color: #d63031; border: 1px solid #ffe3e7; }
+  .home-upcoming { background: #eaf4ff; color: #0984e3; border: 1px solid #d6ebff; }
+
   .menu-buttons { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; }
   .menu-btn { padding: 20px 30px; font-size: 1.2em; border-radius: 15px; border: none; cursor: pointer; font-weight: bold; transition: 0.3s; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 220px; }
   .menu-btn:hover { transform: translateY(-3px); box-shadow: 0 6px 12px rgba(0,0,0,0.15); }
@@ -33,7 +41,10 @@
 
   /* 지도 및 리스트 */
   .map-wrapper { width: 100%; position: relative; }
-  #map-container { width: 100%; height: 600px; background: white; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+  /* 💡 [수정됨] 브라우저가 지도 위 터치 제스처(핀치/드래그)를 가로채면서
+     echarts의 확대/축소와 충돌해 배율이 널뛰던 문제를 막기 위해 지도 영역은
+     브라우저 기본 터치 동작을 끄고 echarts가 전담하도록 한다. (갤럭시/아이폰 공통) */
+  #map-container { width: 100%; height: 600px; background: white; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); touch-action: none; }
   #backBtn { display: none; position: absolute; top: 15px; left: 15px; z-index: 10; padding: 10px 15px; background: white; color: #ff6b81; border: 2px solid #ff6b81; border-radius: 8px; font-weight: bold; cursor: pointer; }
   
   #date-wrapper { display: none; width: 100%; height: 600px; overflow-y: auto; background: white; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); padding: 20px; box-sizing: border-box; }

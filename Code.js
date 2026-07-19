@@ -3,7 +3,9 @@ function doGet() {
   return HtmlService.createTemplateFromFile('Index')
       .evaluate()
       .setTitle('정환❤️선영 다이어리')
-      .addMetaTag('viewport', 'width=device-width, initial-scale=1')
+      // 💡 [수정됨] 페이지 자체의 핀치 확대와 지도 내부 확대(echarts roam)가 동시에 반응해서
+      // 확대/축소가 널뛰던 문제를 막기 위해 페이지 레벨 핀치 줌은 막아둔다.
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 

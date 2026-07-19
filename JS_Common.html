@@ -301,11 +301,16 @@
     const option = {
       tooltip: { formatter: '{b} <br/>방문 일수: {c}일' },
       visualMap: { show: false, min: 1, max: 10, inRange: { color: ['#ffccd5', '#ff4757'] }, outOfRange: { color: ['#eeeeee'] } },
-      series: [{ type: 'map', map: 'korea_prov', roam: true, zoom: 1.2, label: { show: true, fontSize: 11 }, data: mapData }]
+      // 💡 [수정됨] scaleLimit 없이 무한정 확대/축소가 가능하다 보니 모바일 핀치 제스처가
+      // 겹쳐 들어올 때 배율이 널뛰다가 너무 작아진 채로 멈추는 문제가 있었다.
+      // 최소/최대 배율을 고정해서 항상 다시 확대할 수 있게 한다.
+      series: [{ type: 'map', map: 'korea_prov', roam: true, zoom: 1.2, scaleLimit: { min: 1, max: 6 }, label: { show: true, fontSize: 11 }, data: mapData }]
     };
     myChart.setOption(option, true);
     myChart.off('click');
     myChart.on('click', params => { if(provinceCodes[params.name]) drillDownToMunicipality(params.name); });
+
+    renderHomeSummary();
   }
 
   function drillDownToMunicipality(provinceName) {
@@ -323,11 +328,48 @@
     const option = {
       tooltip: { formatter: '{b} <br/>방문 일수: {c}일' },
       visualMap: { show: false, min: 1, max: 10, inRange: { color: ['#ffccd5', '#ff4757'] }, outOfRange: { color: ['#eeeeee'] } },
-      series: [{ type: 'map', map: customMapName, roam: true, zoom: 1.1, label: { show: true, fontSize: 10 }, data: mapData }]
+      series: [{ type: 'map', map: customMapName, roam: true, zoom: 1.1, scaleLimit: { min: 1, max: 6 }, label: { show: true, fontSize: 10 }, data: mapData }]
     };
     myChart.setOption(option, true);
     myChart.off('click');
     myChart.on('click', params => openModal(params.name));
+  }
+
+  // 💡 [신규] 홈 화면 요약: 총 데이트/방문 지역 수, 몇 년 전 오늘의 추억, 다음 예정된 데이트
+  function renderHomeSummary() {
+    const box = document.getElementById('home-summary');
+    if (!box) return;
+
+    const totalCount = dateRecords.length;
+    const regionCount = new Set(dateRecords.map(r => r.region).filter(Boolean)).size;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayYear = today.getFullYear();
+    const monthDay = String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+
+    const pastMemories = dateRecords
+      .filter(r => r.date && r.date.length === 10 && r.date.slice(5) === monthDay && parseInt(r.date.slice(0, 4), 10) < todayYear)
+      .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    const upcoming = dateRecords
+      .filter(r => r.date && new Date(r.date + 'T00:00:00') > today)
+      .sort((a, b) => new Date(a.date) - new Date(b.date))[0];
+
+    let html = `<div class="home-stat">지금까지 <strong>${totalCount}번</strong>의 데이트, <strong>${regionCount}곳</strong>의 추억이 쌓였어요 🗺️</div>`;
+
+    if (pastMemories.length > 0) {
+      const memory = pastMemories[0];
+      const yearsAgo = todayYear - parseInt(memory.date.slice(0, 4), 10);
+      html += `<div class="home-memory">💭 ${yearsAgo}년 전 오늘, <b>${memory.region}</b> ${memory.place}에 다녀왔어요</div>`;
+    }
+
+    if (upcoming) {
+      const dday = Math.round((new Date(upcoming.date + 'T00:00:00') - today) / (1000 * 60 * 60 * 24));
+      html += `<div class="home-upcoming">📅 다음 데이트까지 <strong>D-${dday}</strong> (${upcoming.date} ${upcoming.region} ${upcoming.place})</div>`;
+    }
+
+    box.innerHTML = html;
   }
 
   function openModal(regionName) {
