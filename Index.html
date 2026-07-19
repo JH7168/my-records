@@ -122,6 +122,16 @@
         </div>
       </div>
 
+      <div class="range-filter-box">
+        <div class="range-filter-title">📆 기간 지정해서 소비 확인하기</div>
+        <div class="range-filter-inputs">
+          <input type="date" id="rangeStartInput" onchange="renderExpenseRangeSummary()">
+          <span>~</span>
+          <input type="date" id="rangeEndInput" onchange="renderExpenseRangeSummary()">
+        </div>
+        <div id="range-summary-box"></div>
+      </div>
+
       <div class="filter-box">
         <select id="accFilterYear" class="year-select" onchange="accCurrentSelectedDay=null; renderAccountView();"></select>
         <div id="accFilterMonthButtons" class="month-buttons-wrapper"></div>

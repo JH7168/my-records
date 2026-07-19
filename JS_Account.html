@@ -134,6 +134,64 @@
 
     renderAccountPieChart(expenseStats);
     renderAccountTrendChart(selectedYear);
+    initExpenseRangeInputs();
+  }
+
+  // 💡 [신규] 기간 지정 조회용 날짜 입력의 선택 가능 범위를 실제 기록 날짜로 맞춰준다.
+  // 사용자가 이미 값을 골라둔 경우엔 덮어쓰지 않고 유지한다.
+  function initExpenseRangeInputs() {
+    const startInput = document.getElementById('rangeStartInput');
+    const endInput = document.getElementById('rangeEndInput');
+    if (!startInput || !endInput || accountRecords.length === 0) return;
+
+    const dates = accountRecords.map(r => r.date).filter(Boolean).sort();
+    const minDate = dates[0];
+    const maxDate = dates[dates.length - 1];
+
+    startInput.min = minDate; startInput.max = maxDate;
+    endInput.min = minDate; endInput.max = maxDate;
+
+    if (!startInput.value) startInput.value = minDate;
+    if (!endInput.value) endInput.value = maxDate;
+
+    renderExpenseRangeSummary();
+  }
+
+  // 💡 [신규] 사용자가 지정한 시작일~종료일 사이의 입출금 합계를 보여준다.
+  function renderExpenseRangeSummary() {
+    const box = document.getElementById('range-summary-box');
+    const startInput = document.getElementById('rangeStartInput');
+    const endInput = document.getElementById('rangeEndInput');
+    if (!box || !startInput || !endInput) return;
+
+    const start = startInput.value;
+    const end = endInput.value;
+    if (!start || !end) { box.innerHTML = ''; return; }
+
+    if (start > end) {
+      box.innerHTML = `<div class="range-summary-empty">시작일이 종료일보다 늦어요. 날짜를 다시 확인해주세요!</div>`;
+      return;
+    }
+
+    const rangeRecords = accountRecords.filter(r => r.date && r.date >= start && r.date <= end);
+
+    if (rangeRecords.length === 0) {
+      box.innerHTML = `<div class="range-summary-empty">해당 기간에는 내역이 없습니다.</div>`;
+      return;
+    }
+
+    let rangeIn = 0, rangeOut = 0;
+    rangeRecords.forEach(r => {
+      if (r.type === '입금') rangeIn += Number(r.amount); else rangeOut += Number(r.amount);
+    });
+
+    box.innerHTML = `
+      <div class="range-summary">
+        <div class="range-summary-period">📌 ${start} ~ ${end} (${rangeRecords.length}건)</div>
+        <div class="range-summary-main">이 기간 총 지출: ${rangeOut.toLocaleString()}원</div>
+        <div class="range-summary-sub">입금 +${rangeIn.toLocaleString()}원 · 출금 -${rangeOut.toLocaleString()}원</div>
+      </div>
+    `;
   }
 
   // 💡 통장 기록 '✏️' 아이콘 클릭 시 수정 모드로 세팅하는 함수
