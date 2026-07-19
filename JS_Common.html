@@ -5,7 +5,7 @@
   let dateRecords = [];
   let accountRecords = [];
   let provincesGeoJson, municipalitiesGeoJson;
-  let myChart, accountChart;
+  let myChart, accountChart, trendChart;
   
   let currentSelectedMonth = 6;
   let currentSelectedDay = null; 
@@ -43,6 +43,22 @@
     "제주특별자치도": ["서귀포시", "제주시"]
   };
 
+  // 💡 [정리됨] 지출/수입 분류 목록을 한 곳에서만 관리 (JS_Account.html과 공유)
+  const EXPENSE_CATEGORIES = ["🍕 식당", "☕ 카페/디저트", "🚗 교통/유류비", "🏨 숙박", "🎬 문화/여가", "🛍️ 쇼핑", "💸 기타 지출"];
+  const INCOME_CATEGORIES = ["💰 정기 모임비", "💵 기타 입금"];
+  const CATEGORY_COLORS = {
+    "🍕 식당": "#ff7675",      // 연한 빨강
+    "☕ 카페/디저트": "#fdcb6e", // 노랑주황
+    "🚗 교통/유류비": "#74b9ff", // 파랑
+    "🏨 숙박": "#a29bfe",      // 보라
+    "🎬 문화/여가": "#55efc4",   // 민트
+    "🛍️ 쇼핑": "#ffeaa7",      // 연노랑
+    "💸 기타 지출": "#b2bec3"    // 회색
+  };
+
+  const ANNIVERSARY_KEY = 'coupleAnniversaryDate';
+  const DAY_NAMES = ['일', '월', '화', '수', '목', '금', '토'];
+
   // ==========================================
   // 2. 앱 초기화 (App Init)
   // ==========================================
@@ -50,6 +66,7 @@
     // 차트 및 지도 초기화
     myChart = echarts.init(document.getElementById('map-container'));
     accountChart = echarts.init(document.getElementById('account-chart-container'));
+    trendChart = echarts.init(document.getElementById('account-trend-container'));
     
     // 입력 폼 날짜 기본 세팅
     populateDateSelects('yearInput', 'monthInput', 'dayInput');
@@ -72,8 +89,12 @@
     
     currentSelectedMonth = today.getMonth() + 1;
     accCurrentSelectedMonth = today.getMonth() + 1;
-    initMonthButtons(); 
-    initAccMonthButtons(); 
+    createMonthButtons('filterMonthButtons', currentSelectedMonth, function(m) {
+      currentSelectedMonth = m; currentSelectedDay = null; renderDateView();
+    });
+    createMonthButtons('accFilterMonthButtons', accCurrentSelectedMonth, function(m) {
+      accCurrentSelectedMonth = m; accCurrentSelectedDay = null; renderAccountView();
+    });
 
     // [데이트 기록] 지역 선택 드롭다운 세팅
     const provinceInput = document.getElementById('provinceInput');
@@ -98,17 +119,19 @@
     updateAccountCategoryOptions();
 
     // 데이트 기록 카테고리 통합
-    const unifiedCats = ["🍕 식당", "☕ 카페/디저트", "🚗 교통/유류비", "🏨 숙박", "🎬 문화/여가", "🛍️ 쇼핑", "💸 기타 지출"];
     const catInput = document.getElementById('categoryInput');
     catInput.innerHTML = '';
-    unifiedCats.forEach(cat => catInput.add(new Option(cat, cat)));
+    EXPENSE_CATEGORIES.forEach(cat => catInput.add(new Option(cat, cat)));
+
+    // 💕 D-Day 배너 초기화
+    initDDay();
 
     // 구글 시트에서 데이트 기록 가져와서 지도 그리기
     google.script.run.withSuccessHandler(function(data) {
       dateRecords = data;
       Promise.all([
-        fetch(provUrl).then(res => res.json()),
-        fetch(muniUrl).then(res => res.json())
+        fetchGeoJsonCached(provUrl, 'geo_prov_v1'),
+        fetchGeoJsonCached(muniUrl, 'geo_muni_v1')
       ]).then(([prov, muni]) => {
         provincesGeoJson = prov; municipalitiesGeoJson = muni;
         echarts.registerMap('korea_prov', provincesGeoJson);
@@ -118,6 +141,19 @@
     }).getDateData();
 
     loadAccountData();
+  }
+
+  // 💡 [신규] 지도 GeoJSON은 거의 바뀌지 않으므로 localStorage에 캐시해서
+  // 앱을 열 때마다 외부 CDN에서 다시 받아오지 않도록 한다.
+  function fetchGeoJsonCached(url, cacheKey) {
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+      try { return Promise.resolve(JSON.parse(cached)); } catch (e) { /* 캐시가 손상되었으면 새로 받는다 */ }
+    }
+    return fetch(url).then(res => res.json()).then(data => {
+      try { localStorage.setItem(cacheKey, JSON.stringify(data)); } catch (e) { /* 저장 공간 부족 시 무시 */ }
+      return data;
+    });
   }
 
   // ==========================================
@@ -134,14 +170,20 @@
     el.value = defaultVal;
   }
 
-  // ✨ 데이트 추천 폼 전용 시/군/구 업데이트 함수
-  function updateAiDistrictOptions() {
-    const province = document.getElementById('aiProvinceInput').value;
-    const districtInput = document.getElementById('aiDistrictInput');
-    districtInput.innerHTML = ''; 
+  // 💡 [정리됨] 시/도 선택에 맞춰 시/군/구 옵션을 채워주는 공용 함수
+  // (데이트 기록 폼의 updateDistrictOptions, 데이트 추천 폼의 updateAiDistrictOptions가 함께 사용)
+  function populateDistrictSelect(provinceSelectId, districtSelectId) {
+    const province = document.getElementById(provinceSelectId).value;
+    const districtInput = document.getElementById(districtSelectId);
+    districtInput.innerHTML = '';
     if (regionData[province]) {
       regionData[province].forEach(d => districtInput.add(new Option(d, d)));
     }
+  }
+
+  // ✨ 데이트 추천 폼 전용 시/군/구 업데이트 함수
+  function updateAiDistrictOptions() {
+    populateDistrictSelect('aiProvinceInput', 'aiDistrictInput');
   }
 
   // ✨ '직접 입력' 선택 시 인풋창 열고 닫는 함수
@@ -150,58 +192,45 @@
     inputEl.style.display = selectObj.value === '직접 입력' ? 'block' : 'none';
   }
 
-  function initMonthButtons() {
-    const btnContainer = document.getElementById('filterMonthButtons');
+  // 💡 [정리됨] 월 선택 버튼 12개를 그려주는 공용 함수.
+  // 데이트 기록/통장 관리/지역 모달 3곳에서 변수명만 다르게 복붙되어 있던 로직을 하나로 통합.
+  function createMonthButtons(containerId, selectedMonth, onSelect) {
+    const btnContainer = document.getElementById(containerId);
     btnContainer.innerHTML = '';
     for (let m = 1; m <= 12; m++) {
       const btn = document.createElement('button');
-      btn.className = 'month-btn' + (m === currentSelectedMonth ? ' active' : '');
+      btn.className = 'month-btn' + (m === selectedMonth ? ' active' : '');
       btn.innerText = m + '월';
       btn.onclick = function() {
-        document.querySelectorAll('#filterMonthButtons .month-btn').forEach(b => b.classList.remove('active'));
+        btnContainer.querySelectorAll('.month-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-        currentSelectedMonth = m;
-        currentSelectedDay = null; 
-        renderDateView();
+        onSelect(m);
       };
       btnContainer.appendChild(btn);
     }
   }
 
-  function initAccMonthButtons() {
-    const btnContainer = document.getElementById('accFilterMonthButtons');
+  // 💡 [정리됨] '전체' + 일자별 버튼을 그려주는 공용 함수.
+  // 데이트 기록 / 지역 모달 / 통장 관리 3곳에서 복붙되어 있던 일자 버튼 로직을 하나로 통합.
+  function createDayButtons(containerId, dates, selectedDay, onSelect) {
+    const btnContainer = document.getElementById(containerId);
     btnContainer.innerHTML = '';
-    for (let m = 1; m <= 12; m++) {
-      const btn = document.createElement('button');
-      btn.className = 'month-btn' + (m === accCurrentSelectedMonth ? ' active' : '');
-      btn.innerText = m + '월';
-      btn.onclick = function() {
-        document.querySelectorAll('#accFilterMonthButtons .month-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        accCurrentSelectedMonth = m;
-        accCurrentSelectedDay = null; 
-        renderAccountView();
-      };
-      btnContainer.appendChild(btn);
-    }
-  }
 
-  function initModalMonthButtons() {
-    const btnContainer = document.getElementById('modalFilterMonthButtons');
-    btnContainer.innerHTML = '';
-    for (let m = 1; m <= 12; m++) {
-      const btn = document.createElement('button');
-      btn.className = 'month-btn' + (m === modalSelectedMonth ? ' active' : '');
-      btn.innerText = m + '월';
-      btn.onclick = function() {
-        document.querySelectorAll('#modalFilterMonthButtons .month-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        modalSelectedMonth = m;
-        modalSelectedDay = null; 
-        renderModalDateView();
-      };
-      btnContainer.appendChild(btn);
-    }
+    const allBtn = document.createElement('button');
+    allBtn.className = 'day-btn' + (selectedDay === null ? ' active' : '');
+    allBtn.innerText = '전체';
+    allBtn.onclick = function() { onSelect(null); };
+    btnContainer.appendChild(allBtn);
+
+    dates.forEach(dateStr => {
+      const dayNum = parseInt(dateStr.split('-')[2], 10);
+      const dayOfWeek = DAY_NAMES[new Date(dateStr).getDay()];
+      const dayBtn = document.createElement('button');
+      dayBtn.className = 'day-btn' + (selectedDay === dateStr ? ' active' : '');
+      dayBtn.innerText = `${dayNum}일(${dayOfWeek})`;
+      dayBtn.onclick = function() { onSelect(dateStr); };
+      btnContainer.appendChild(dayBtn);
+    });
   }
 
   // 화면 메뉴 이동 내비게이션 (추천 화면 영역 제어 추가)
@@ -218,7 +247,7 @@
     }
     if (app === 'account') {
       document.getElementById('account-app').style.display = 'block';
-      setTimeout(() => accountChart.resize(), 50);
+      setTimeout(() => { accountChart.resize(); trendChart.resize(); }, 50);
     }
     if (app === 'recommend') {
       document.getElementById('recommend-app').style.display = 'block';
@@ -319,7 +348,9 @@
       modalSelectedDay = null; 
     }
     
-    initModalMonthButtons();
+    createMonthButtons('modalFilterMonthButtons', modalSelectedMonth, function(m) {
+      modalSelectedMonth = m; modalSelectedDay = null; renderModalDateView();
+    });
     renderModalDateView();
     document.getElementById('modal').style.display = 'flex';
   }
@@ -331,9 +362,76 @@
     document.getElementById('custom-alert-msg').innerText = msg;
     document.getElementById('custom-alert').style.display = 'flex';
   }
-  
+
   function closeCustomAlert() {
     document.getElementById('custom-alert').style.display = 'none';
+  }
+
+  // 💡 [신규] 삭제 등 되돌릴 수 없는 동작 전에 확인을 받는 공용 확인창
+  let _confirmCallback = null;
+  function showCustomConfirm(msg, onConfirm) {
+    document.getElementById('custom-confirm-msg').innerText = msg;
+    _confirmCallback = onConfirm;
+    document.getElementById('custom-confirm').style.display = 'flex';
+  }
+
+  function closeCustomConfirm(result) {
+    document.getElementById('custom-confirm').style.display = 'none';
+    const cb = _confirmCallback;
+    _confirmCallback = null;
+    if (result && typeof cb === 'function') cb();
+  }
+
+  // ==========================================
+  // 💕 D-Day 카운터 (홈 화면)
+  // ==========================================
+  function initDDay() {
+    renderDDay();
+  }
+
+  function renderDDay() {
+    const banner = document.getElementById('dday-banner');
+    if (!banner) return;
+    const saved = localStorage.getItem(ANNIVERSARY_KEY);
+
+    if (!saved) {
+      banner.innerHTML = `
+        <div class="dday-setup">
+          <span>우리가 처음 만난 날을 등록해보세요 💕</span>
+          <div class="dday-setup-row">
+            <input type="date" id="dday-input">
+            <button onclick="saveAnniversary()">등록</button>
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    const start = new Date(saved + 'T00:00:00');
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const diffDays = Math.floor((today - start) / (1000 * 60 * 60 * 24)) + 1;
+    const [y, m, d] = saved.split('-');
+
+    banner.innerHTML = `
+      <div class="dday-display">
+        <span class="dday-count">우리가 함께한 지 <strong>${diffDays}</strong>일째 💕</span>
+        <span class="dday-date">(${y}.${parseInt(m, 10)}.${parseInt(d, 10)}~)</span>
+        <span class="dday-edit" onclick="resetAnniversary()">수정</span>
+      </div>
+    `;
+  }
+
+  function saveAnniversary() {
+    const val = document.getElementById('dday-input').value;
+    if (!val) { showCustomAlert("날짜를 선택해주세요!"); return; }
+    localStorage.setItem(ANNIVERSARY_KEY, val);
+    renderDDay();
+  }
+
+  function resetAnniversary() {
+    localStorage.removeItem(ANNIVERSARY_KEY);
+    renderDDay();
   }
 
   // 금액 콤마 포맷 함수
@@ -466,8 +564,9 @@
   // 6. 브라우저 이벤트 리스너 바인딩
   // ==========================================
   window.addEventListener('resize', () => {
-    if(myChart) myChart.resize(); 
-    if(accountChart) accountChart.resize(); 
+    if(myChart) myChart.resize();
+    if(accountChart) accountChart.resize();
+    if(trendChart) trendChart.resize();
   });
   
   window.onload = initApp;
