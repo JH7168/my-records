@@ -56,7 +56,7 @@
     "💸 기타 지출": "#b2bec3"    // 회색
   };
 
-  const ANNIVERSARY_KEY = 'coupleAnniversaryDate';
+  const ANNIVERSARY_DATE = '2025-11-22'; // 💕 처음 만난 날 (고정)
   const DAY_NAMES = ['일', '월', '화', '수', '목', '금', '토'];
 
   // ==========================================
@@ -392,46 +392,19 @@
   function renderDDay() {
     const banner = document.getElementById('dday-banner');
     if (!banner) return;
-    const saved = localStorage.getItem(ANNIVERSARY_KEY);
 
-    if (!saved) {
-      banner.innerHTML = `
-        <div class="dday-setup">
-          <span>우리가 처음 만난 날을 등록해보세요 💕</span>
-          <div class="dday-setup-row">
-            <input type="date" id="dday-input">
-            <button onclick="saveAnniversary()">등록</button>
-          </div>
-        </div>
-      `;
-      return;
-    }
-
-    const start = new Date(saved + 'T00:00:00');
+    const start = new Date(ANNIVERSARY_DATE + 'T00:00:00');
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const diffDays = Math.floor((today - start) / (1000 * 60 * 60 * 24)) + 1;
-    const [y, m, d] = saved.split('-');
+    const [y, m, d] = ANNIVERSARY_DATE.split('-');
 
     banner.innerHTML = `
       <div class="dday-display">
         <span class="dday-count">우리가 함께한 지 <strong>${diffDays}</strong>일째 💕</span>
         <span class="dday-date">(${y}.${parseInt(m, 10)}.${parseInt(d, 10)}~)</span>
-        <span class="dday-edit" onclick="resetAnniversary()">수정</span>
       </div>
     `;
-  }
-
-  function saveAnniversary() {
-    const val = document.getElementById('dday-input').value;
-    if (!val) { showCustomAlert("날짜를 선택해주세요!"); return; }
-    localStorage.setItem(ANNIVERSARY_KEY, val);
-    renderDDay();
-  }
-
-  function resetAnniversary() {
-    localStorage.removeItem(ANNIVERSARY_KEY);
-    renderDDay();
   }
 
   // 금액 콤마 포맷 함수
