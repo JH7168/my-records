@@ -335,13 +335,10 @@
     myChart.on('click', params => openModal(params.name));
   }
 
-  // 💡 [신규] 홈 화면 요약: 총 데이트/방문 지역 수, 몇 년 전 오늘의 추억, 다음 예정된 데이트
+  // 💡 [신규] 홈 화면 요약: 몇 년 전 오늘의 추억, 다음 예정된 데이트
   function renderHomeSummary() {
     const box = document.getElementById('home-summary');
     if (!box) return;
-
-    const totalCount = dateRecords.length;
-    const regionCount = new Set(dateRecords.map(r => r.region).filter(Boolean)).size;
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -356,7 +353,7 @@
       .filter(r => r.date && new Date(r.date + 'T00:00:00') > today)
       .sort((a, b) => new Date(a.date) - new Date(b.date))[0];
 
-    let html = `<div class="home-stat">지금까지 <strong>${totalCount}번</strong>의 데이트, <strong>${regionCount}곳</strong>의 추억이 쌓였어요 🗺️</div>`;
+    let html = '';
 
     if (pastMemories.length > 0) {
       const memory = pastMemories[0];

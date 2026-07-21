@@ -13,9 +13,8 @@
   .dday-display strong { font-size: 1.3em; }
   .dday-date { color: #aaa; font-size: 0.85em; }
 
-  /* 🗺️💬 홈 화면 요약 (총 데이트/지역 수, 오늘의 추억, 다음 데이트 예정) */
+  /* 🗺️💬 홈 화면 요약 (오늘의 추억, 다음 데이트 예정) */
   .home-summary { margin-bottom: 25px; display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: 320px; }
-  .home-stat { color: #636e72; font-size: 0.9em; }
   .home-memory, .home-upcoming { border-radius: 10px; padding: 8px 14px; font-size: 0.85em; text-align: center; word-break: keep-all; }
   .home-memory { background: #fff5f6; color: #d63031; border: 1px solid #ffe3e7; }
   .home-upcoming { background: #eaf4ff; color: #0984e3; border: 1px solid #d6ebff; }
@@ -133,9 +132,10 @@
   .detail-item span { display: block; font-size: 0.9em; opacity: 0.9; }
   .detail-item strong { font-size: 1.1em; }
   
-  /* 📆 기간 지정 소비 조회 */
+  /* 📆 기간 지정 소비 조회 (체크했을 때만 펼쳐짐) */
+  .range-toggle-label { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; color: #555; font-size: 0.9em; font-weight: bold; cursor: pointer; }
+  .range-toggle-label input[type="checkbox"] { width: auto; margin: 0; cursor: pointer; }
   .range-filter-box { background: white; border-radius: 15px; padding: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; }
-  .range-filter-title { font-weight: bold; color: #444; margin-bottom: 10px; font-size: 0.95em; }
   .range-filter-inputs { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
   .range-filter-inputs input[type="date"] { flex: 1; padding: 8px; border: 2px solid #d6ebff; border-radius: 8px; font-size: 13px; }
   .range-filter-inputs span { color: #aaa; font-weight: bold; }

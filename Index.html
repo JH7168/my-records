@@ -122,8 +122,11 @@
         </div>
       </div>
 
-      <div class="range-filter-box">
-        <div class="range-filter-title">📆 기간 지정해서 소비 확인하기</div>
+      <label class="range-toggle-label">
+        <input type="checkbox" id="rangeToggle" onchange="toggleExpenseRangeFilter()">
+        📆 기간 지정해서 소비 확인하기
+      </label>
+      <div class="range-filter-box" id="range-filter-box" style="display:none;">
         <div class="range-filter-inputs">
           <input type="date" id="rangeStartInput" onchange="renderExpenseRangeSummary()">
           <span>~</span>
